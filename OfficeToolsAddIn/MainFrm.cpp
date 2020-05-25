@@ -182,10 +182,9 @@ void CMainFrame::OnButtonSaveChange()
 	LOG_TRACE << __FUNCTION__;
 
 	OfficeAddIn office_add_in;
-	office_add_in.SaveAddinInformation();
 
 	BeginWaitCursor();
-
+	office_add_in.SaveAddinInformation();
 	if (nullptr != GetActiveView())
 	{
 		(dynamic_cast<COfficeToolsAddInView*>(GetActiveView()))->ShowAddIns();

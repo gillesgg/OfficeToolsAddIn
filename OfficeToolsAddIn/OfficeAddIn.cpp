@@ -78,6 +78,8 @@ void OfficeAddIn::ReadAddinInformation()
 	ReadAddInformation(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
 	ReadAddInformation(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
 	ReadAddInformation(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Microsoft\\Office\\Excel\\Addins");
+	ReadAddInformation(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Wow6432Node\\Microsoft\\Office\\Excel\\Addins");
+	
 	ComputeAddInInformation(processinformation);
 	XLSingleton::getInstance()->Set_Addin_info(processinformation);
 }
