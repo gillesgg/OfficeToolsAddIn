@@ -1,0 +1,3 @@
+ vcpkg install boost:x64-windows cpprestsdk:x64-windows 
+ vcpkg export boost:x64-windows cpprestsdk:x64-windows --nuget --nuget-id=OfficeToolsAddInNameDependencies --nuget-version=1.0.0
+ Install-Package OfficeToolsAddInNameDependencies -Source "E:\DEV\DEV.PKG\vcpkg"
