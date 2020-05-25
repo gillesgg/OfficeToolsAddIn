@@ -44,7 +44,7 @@ COfficeToolsAddInApp::COfficeToolsAddInApp() noexcept
 	m_bHiColorIcons = TRUE;
 
 	// support Restart Manager
-	m_dwRestartManagerSupportFlags = AFX_RESTART_MANAGER_SUPPORT_RESTART;
+	//m_dwRestartManagerSupportFlags = AFX_RESTART_MANAGER_SUPPORT_RESTART;
 #ifdef _MANAGED
 	// If the application is built using Common Language Runtime support (/clr):
 	//     1) This additional setting is needed for Restart Manager support to work properly.
