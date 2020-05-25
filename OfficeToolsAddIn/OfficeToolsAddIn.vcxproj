@@ -121,6 +121,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <AdditionalDependencies>Rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -176,6 +177,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalDependencies>Rpcrt4.lib</AdditionalDependencies>
+      <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>

@@ -543,15 +543,15 @@ COLORREF COfficeToolsAddInView::ResolveItemColor(std::wstring str_progid)
 	auto i = processinformation.addininformation_.find(str_progid);
 	if (i != processinformation.addininformation_.end())
 	{
-		if (i->second.addType_ == AddInType::XL && i->second.Installed_ == L"False")
+		if (i->second.addType_ == AddInType::XL && i->second.Installed_ == L"True")
 		{
-			return RGB(255, 0, 0);
+			return RGB(0, 128, 255);
 		}
 
-		if (i->second.addType_ == AddInType::OFFICE && (i->second.LoadBehavior_ == 0 || i->second.LoadBehavior_ == 8 ))
+		if (i->second.addType_ == AddInType::OFFICE && (i->second.LoadBehavior_ == 1 || i->second.LoadBehavior_ == 3 || i->second.LoadBehavior_ == 9 || i->second.LoadBehavior_ == 16))
 		{
-			return RGB(255, 0, 0);
+			return RGB(0, 128, 0);
 		}
 	}
-	return RGB(0, 128, 0);
+	return RGB(255, 0, 0);
 }
