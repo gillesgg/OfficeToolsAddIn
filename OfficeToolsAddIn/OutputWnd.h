@@ -41,13 +41,12 @@ public:
 
 	void UpdateFonts();
 
+public:
+	COutputList m_wndOutputDebug;
 // Attributes
 protected:
 	CMFCTabCtrl	m_wndTabs;
 	CFont font_;
-
-	COutputList m_wndOutputDebug;
-
 
 protected:
 	void FillDebugWindow();

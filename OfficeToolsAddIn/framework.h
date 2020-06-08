@@ -15,6 +15,8 @@
 #define VC_EXTRALEAN            // Exclude rarely-used stuff from Windows headers
 #endif
 
+#define SECURITY_WIN32
+
 #include "targetver.h"
 
 #define _ATL_CSTRING_EXPLICIT_CONSTRUCTORS      // some CString constructors will be explicit
@@ -42,9 +44,18 @@
 
 #include <psapi.h>
 
-//#include "XLSingleton.h"
+#include <ntsecapi.h>
 
+#include <sddl.h>
 
+#include <Lm.h>
+
+#include <Security.h>
+//#include <ntlsa.h>
+
+#define LSA_LOOKUP_ISOLATED_AS_LOCAL  0x80000000
+#define STATUS_NONE_MAPPED               ((NTSTATUS)0xC0000073L)
+#define STATUS_SOME_NOT_MAPPED           ((NTSTATUS)0x00000107L)
 
 #import <C:\Program Files\Microsoft Office\root\vfs\ProgramFilesCommonX64\Microsoft Shared\OFFICE16\MSO.DLL> \
 	rename("DocumentProperties", "_DocumentProperties") \

@@ -9,10 +9,11 @@ public:
 	void SaveAddinInformation();
 private:
 	void DisableOfficeAddin(ProcessInformation processinformation);
-	void ReadAddInformation(HKEY parent, std::wstring rootKey);
+	void ReadAddInformation(HKEY parent, std::wstring siduserkey, std::wstring rootKey);
 	void ComputeAddInInformation(ProcessInformation& processinformation);
 	void DumpAddIninfo();
 	void WriteInformation(HKEY parent, std::wstring str_key, DWORD dw_value);
+
 private:
 	std::map<std::wstring, AddinInformation>		addinsInfo_;
 };

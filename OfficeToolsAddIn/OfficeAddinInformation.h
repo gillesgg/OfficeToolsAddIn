@@ -24,6 +24,7 @@ public:
 	AddInType		addType_;
 	std::wstring	key_;
 	HKEY			parent_;
+	std::wstring	str_account;
 };
 
 
@@ -49,4 +50,5 @@ public:
 	std::wstring Key_;
 	HKEY		 Parent_;
 	std::wstring FriendlyName_;
+	std::wstring str_account_;
 };

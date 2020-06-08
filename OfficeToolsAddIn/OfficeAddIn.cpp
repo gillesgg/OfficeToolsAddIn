@@ -61,7 +61,40 @@ void OfficeAddIn::WriteInformation(HKEY parent, std::wstring str_key, DWORD dw_v
 		LOG_ERROR << __FUNCTION__ << " unable to write the value" << " key:" << str_key << " value:" << dw_value << " status:" << status;
 	}
 }
+std::list<std::wstring> EnumerateUserNames()
+{
+	LOG_TRACE << __FUNCTION__;
 
+	CRegKey key;
+	CRegKey keyinformation;
+	DWORD dwIndex = 0;
+	DWORD cbName = IS_KEY_LEN;
+	WCHAR szSubKeyName[IS_KEY_LEN] = { 0 };
+	LONG lRet;
+
+	std::list<std::wstring> listusers;
+	LSTATUS status;
+
+	status = key.Open(HKEY_USERS, nullptr, KEY_READ);
+	if (ERROR_SUCCESS == status)
+	{
+		while ((lRet = key.EnumKey(dwIndex, szSubKeyName, &cbName)) != ERROR_NO_MORE_ITEMS)
+		{
+
+			listusers.push_back(szSubKeyName);
+
+			dwIndex++;
+			cbName = IS_KEY_LEN;
+		}
+		key.Close();
+	}
+	else
+	{
+		LOG_ERROR << __FUNCTION__ << " unable to open the key:" << "HKEY_USERS" << " status:" << status;
+	}
+
+	return listusers;
+}
 
 void OfficeAddIn::ReadAddinInformation()
 {
@@ -75,15 +108,93 @@ void OfficeAddIn::ReadAddinInformation()
 	ExcelAutomation automation;
 	automation.ListInformations(processinformation);
 
-	ReadAddInformation(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
-	ReadAddInformation(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
-	ReadAddInformation(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Microsoft\\Office\\Excel\\Addins");
-	ReadAddInformation(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Wow6432Node\\Microsoft\\Office\\Excel\\Addins");
+	auto users = EnumerateUserNames();
+
+	for (auto user : users)
+	{
+		ReadAddInformation(HKEY_USERS,user, user + L"\\SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
+		ReadAddInformation(HKEY_USERS, user, user + L"\\SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Microsoft\\Office\\Excel\\Addins");
+		ReadAddInformation(HKEY_USERS, user, user + L"\\SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Wow6432Node\\Microsoft\\Office\\Excel\\Addins");
+
+	}
+	ReadAddInformation(HKEY_CURRENT_USER,L"", L"SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
+	ReadAddInformation(HKEY_LOCAL_MACHINE, L"", L"SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
+	ReadAddInformation(HKEY_LOCAL_MACHINE, L"", L"SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Microsoft\\Office\\Excel\\Addins");
+	ReadAddInformation(HKEY_LOCAL_MACHINE, L"", L"SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Wow6432Node\\Microsoft\\Office\\Excel\\Addins");
 	
 	ComputeAddInInformation(processinformation);
 	XLSingleton::getInstance()->Set_Addin_info(processinformation);
 }
-void OfficeAddIn::ReadAddInformation(HKEY parent, std::wstring rootKey)
+
+
+std::wstring get_system_user_name()
+{
+	std::wstring result;
+	const size_t initial_buf_size = 128;
+	std::vector<wchar_t> buffer(initial_buf_size, 0);
+	ULONG char_count = static_cast<ULONG>(buffer.size() - 1);
+	const EXTENDED_NAME_FORMAT fmt = NameSamCompatible;
+	if (!GetUserNameEx(fmt, &buffer[0], &char_count) && ERROR_MORE_DATA == ::GetLastError() && char_count > 0)
+	{
+		buffer.resize(char_count + 1, 0);
+		if (!GetUserNameEx(fmt, &buffer[0], &char_count))
+			return L"";
+	}
+
+	if (char_count > 0)
+		result = &buffer[0];
+
+	return result;
+}
+
+HRESULT GetUserInfo(std::wstring sid_str, std::wstring& str_name, std::wstring& str_domain)
+{
+	SID_NAME_USE user_type;
+	PSID sid = NULL;
+	HRESULT ret = E_FAIL;
+	if (ConvertStringSidToSid(sid_str.c_str(), &sid)) 
+	{
+		DWORD name_size = 0, domain_size = 0;
+		if (!LookupAccountSid(NULL, sid, NULL, &name_size, NULL,&domain_size, &user_type) && ERROR_INSUFFICIENT_BUFFER != GetLastError()) 
+		{
+			LocalFree(sid);
+			return(HRESULT_FROM_WIN32(GetLastError()));
+		}
+		wchar_t* c_name = new wchar_t[name_size];
+
+		if (!c_name) 
+		{
+			LocalFree(sid);
+			return E_OUTOFMEMORY;
+		}
+
+		wchar_t* c_domain = new wchar_t[domain_size];		
+		if (!c_domain) 
+		{
+			delete[] c_name;
+			LocalFree(sid);
+			return E_OUTOFMEMORY;
+		}
+
+		if (LookupAccountSid(NULL, sid, c_name, &name_size, c_domain,&domain_size, &user_type)) 
+		{
+			ret = S_OK;
+			str_name = c_name;
+			str_domain = c_domain;
+		}
+		else 
+		{
+			return(HRESULT_FROM_WIN32(GetLastError()));
+		}
+
+		delete[] c_name;
+		delete[] c_domain;
+		LocalFree(sid);
+	}
+	return ret;
+}
+
+void OfficeAddIn::ReadAddInformation(HKEY parent,std::wstring siduserkey, std::wstring rootKey)
 {
 	LOG_TRACE << __FUNCTION__;
 
@@ -128,13 +239,32 @@ void OfficeAddIn::ReadAddInformation(HKEY parent, std::wstring rootKey)
 					}
 
 					len = sizeof(path_buff);
+					std::wstring str_name;
+					std::wstring str_domain;
+
 					if (keyinformation.QueryStringValue(L"FriendlyName", path_buff, &len) == ERROR_SUCCESS)
 					{
 						info.FriendlyName_ = path_buff;
 					}
-
+					
 					info.Key_ = infoPlugIn;
 					info.Parent_ = parent;
+
+					
+
+					if (siduserkey.empty())
+					{
+						info.str_account_ = get_system_user_name();
+					}
+					else
+					{
+						if (SUCCEEDED(GetUserInfo(siduserkey, str_name, str_domain)))
+						{
+							info.str_account_ = str_domain + L"\\" + str_name;
+						}
+					}
+					
+
 					keyinformation.Close();
 				}
 			}
@@ -179,6 +309,7 @@ void OfficeAddIn::ComputeAddInInformation(ProcessInformation& processinformation
 					it->second.LoadBehavior_ = i->second.Startmode_;
 					it->second.parent_ = i->second.Parent_;
 					it->second.key_ = i->second.Key_;
+					it->second.str_account = i->second.str_account_;
 				}
 				else
 				{
@@ -194,7 +325,9 @@ void OfficeAddIn::ComputeAddInInformation(ProcessInformation& processinformation
 		{
 			it->second.LoadBehavior_ = 100;
 			it->second.parent_ = nullptr;
-			it->second.key_ = L"";
+			it->second.key_ = L"";					
+			it->second.str_account = get_system_user_name();
+			
 		}
 	}
 }

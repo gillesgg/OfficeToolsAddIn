@@ -115,6 +115,8 @@ void COfficeToolsAddInView::OnUpdateRendererOfficeAddIn(CCmdUI* pCmdUI)
 #pragma endregion
 
 
+
+
 /// <summary>
 /// Return the current selected item
 /// </summary>
@@ -296,9 +298,11 @@ void COfficeToolsAddInView::CreateHeaders()
 	this->GetListCtrl().InsertColumn(x++, L"Name", LVCFMT_LEFT, 300);
 	this->GetListCtrl().InsertColumn(x++, L"ProgId", LVCFMT_LEFT, 300);	
 	this->GetListCtrl().InsertColumn(x++, L"Location", LVCFMT_LEFT, 300);
-	this->GetListCtrl().InsertColumn(x++, L"Type", LVCFMT_LEFT, 300);
-	this->GetListCtrl().InsertColumn(x++, L"Load", LVCFMT_LEFT, 300);
+	this->GetListCtrl().InsertColumn(x++, L"Type", LVCFMT_LEFT, 150);
+	this->GetListCtrl().InsertColumn(x++, L"Load", LVCFMT_LEFT, 150);
 	this->GetListCtrl().InsertColumn(x++, L"Startup type", LVCFMT_LEFT, 300);
+	this->GetListCtrl().InsertColumn(x++, L"Registry location", LVCFMT_LEFT, 600);
+	this->GetListCtrl().InsertColumn(x++, L"Account", LVCFMT_LEFT, 300);
 }
 
 void COfficeToolsAddInView::ShowAddIns()
@@ -344,6 +348,37 @@ void COfficeToolsAddInView::ShowAddIns()
 
 		lvi.iSubItem = 5;
 		lvi.pszText = (WCHAR*)smode.c_str();
+		this->GetListCtrl().SetItem(&lvi);
+
+		std::wstring valueKey;
+
+		if (item.second.addType_ == AddInType::OFFICE)
+		{
+			if (item.second.parent_ == HKEY_LOCAL_MACHINE)
+			{
+				valueKey = L"HKEY_LOCAL_MACHINE";
+			}
+			else if (item.second.parent_ == HKEY_CURRENT_USER)
+			{
+				valueKey = L"HKEY_CURRENT_USER";
+			}
+			else
+			{
+				valueKey = L"HKEY_USERS";
+			}
+			valueKey += L"\\" + item.second.key_;
+			lvi.pszText = (WCHAR*)valueKey.c_str();
+		}
+		else
+		{
+			lvi.pszText = L"Not applicable";
+		}
+
+		lvi.iSubItem = 6;
+		this->GetListCtrl().SetItem(&lvi);
+
+		lvi.iSubItem = 7;
+		lvi.pszText = (wchar_t*)item.second.str_account.c_str();
 		this->GetListCtrl().SetItem(&lvi);
 	}	
 }

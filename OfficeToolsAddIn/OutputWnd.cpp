@@ -15,7 +15,7 @@
 #include "OutputWnd.h"
 #include "Resource.h"
 #include "MainFrm.h"
-
+#include "XLSingleton.h"
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #undef THIS_FILE
@@ -61,6 +61,8 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		TRACE0("Failed to create output windows\n");
 		return -1;      // fail to create
 	}
+
+	XLSingleton::getInstance()->Set_Log_info(m_wndOutputDebug.GetSafeHwnd());
 
 	UpdateFonts();
 

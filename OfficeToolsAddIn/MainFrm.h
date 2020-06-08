@@ -47,12 +47,14 @@ protected:  // control bar embedded members
 	CMFCRibbonApplicationButton m_MainButton;
 	CMFCToolBarImages m_PanelImages;
 	//CMFCRibbonStatusBar	m_wndStatusBar;
-	//COutputWnd			m_wndOutput;
+	COutputWnd			m_wndOutput;
 	CMFCRibbonApplicationButton m_wndRibbonButton;
 
 private:
 	fs::path SaveFile();
 	fs::path OpenFile();
+	fs::path SaveFileTxt();
+	void SaveLogs(fs::path p_filenamepath);
 	
 // Generated message map functions
 protected:
@@ -68,6 +70,7 @@ public:
 	afx_msg void OnButtonExport();
 	afx_msg void OnButtonImport();
 	afx_msg void OnButtonSaveChange();
+	afx_msg void OnButtonExportLogs();
 };
 
 

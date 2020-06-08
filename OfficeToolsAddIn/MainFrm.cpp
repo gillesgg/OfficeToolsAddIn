@@ -27,6 +27,7 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWndEx)
 	ON_COMMAND(ID_BUTTON_DISABLE, &CMainFrame::OnButtonDisable)
 	ON_COMMAND(ID_BUTTON_EXPORT, &CMainFrame::OnButtonExport)
 	ON_COMMAND(ID_BUTTON_IMPORT, &CMainFrame::OnButtonImport)
+	ON_COMMAND(ID_BUTTON_EXPORTLOGS, &CMainFrame::OnButtonExportLogs)
 	ON_COMMAND(ID_BUTTON_SAVE_CHANGE, &CMainFrame::OnButtonSaveChange)
 END_MESSAGE_MAP()
 
@@ -34,7 +35,9 @@ CMainFrame::CMainFrame() noexcept
 {}
 
 CMainFrame::~CMainFrame()
-{}
+{
+	::ExitProcess(0);
+}
 
 
 void CMainFrame::OnUpdateFrameTitle(BOOL Nada)
@@ -52,6 +55,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		return -1;
 
 	//BOOL bNameValid;
+	
 
 	m_wndRibbonBar.Create(this);
 	m_wndRibbonBar.LoadFromResource(IDR_RIBBON);
@@ -80,8 +84,8 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		return -1;
 	}
 
-	/*m_wndOutput.EnableDocking(CBRS_ALIGN_ANY);
-	DockPane(&m_wndOutput);*/
+	m_wndOutput.EnableDocking(CBRS_ALIGN_ANY);
+	DockPane(&m_wndOutput);
 
 	CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerWindows7));
 	m_wndRibbonBar.SetWindows7Look(TRUE);
@@ -103,24 +107,24 @@ BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
 
 BOOL CMainFrame::CreateDockingWindows()
 {
-	//BOOL		bNameValid;
-	//CString		strOutputWnd;
+	BOOL		bNameValid;
+	CString		strOutputWnd;
 
-	//bNameValid = strOutputWnd.LoadString(IDS_OUTPUT_WND);
-	//ASSERT(bNameValid);
-	//if (!m_wndOutput.Create(strOutputWnd, this, CRect(0, 0, 100, 100), TRUE, ID_VIEW_OUTPUTWND, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | CBRS_BOTTOM | CBRS_FLOAT_MULTI))
-	//{
-	//	LOG_ERROR << __FUNCTION__ << " Failed to create Output window";
-	//	return FALSE; // failed to create
-	//}
-	//SetDockingWindowIcons(theApp.m_bHiColorIcons);
+	bNameValid = strOutputWnd.LoadString(IDS_OUTPUT_WND);
+	ASSERT(bNameValid);
+	if (!m_wndOutput.Create(strOutputWnd, this, CRect(0, 0, 100, 100), TRUE, ID_VIEW_OUTPUTWND, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | CBRS_BOTTOM | CBRS_FLOAT_MULTI))
+	{
+		LOG_ERROR << __FUNCTION__ << " Failed to create Output window";
+		return FALSE; // failed to create
+	}
+	SetDockingWindowIcons(theApp.m_bHiColorIcons);
 	return TRUE;
 }
 
 void CMainFrame::SetDockingWindowIcons(BOOL bHiColorIcons)
 {
-	/*HICON hOutputBarIcon = (HICON) ::LoadImage(::AfxGetResourceHandle(), MAKEINTRESOURCE(bHiColorIcons ? IDI_OUTPUT_WND_HC : IDI_OUTPUT_WND), IMAGE_ICON, ::GetSystemMetrics(SM_CXSMICON), ::GetSystemMetrics(SM_CYSMICON), 0);
-	m_wndOutput.SetIcon(hOutputBarIcon, FALSE);*/
+	HICON hOutputBarIcon = (HICON) ::LoadImage(::AfxGetResourceHandle(), MAKEINTRESOURCE(bHiColorIcons ? IDI_OUTPUT_WND_HC : IDI_OUTPUT_WND), IMAGE_ICON, ::GetSystemMetrics(SM_CXSMICON), ::GetSystemMetrics(SM_CYSMICON), 0);
+	m_wndOutput.SetIcon(hOutputBarIcon, FALSE);
 
 }
 
@@ -143,7 +147,7 @@ void CMainFrame::Dump(CDumpContext& dc) const
 void CMainFrame::OnSettingChange(UINT uFlags, LPCTSTR lpszSection)
 {
 	CFrameWndEx::OnSettingChange(uFlags, lpszSection);
-	//m_wndOutput.UpdateFonts();
+	m_wndOutput.UpdateFonts();
 }
 
 void CMainFrame::OnButtonRefresh()
@@ -213,7 +217,35 @@ fs::path CMainFrame::SaveFile()
 			}
 			catch (std::filesystem::filesystem_error const& ex)
 			{
-				LOG_ERROR << __FUNCTION__ << "Unable to remote the file, file=" << p_filename_path << "exception:" << ex.what();
+				LOG_ERROR << __FUNCTION__ << "Unable to remove the file, file=" << p_filename_path << "exception:" << ex.what();
+				return fs::path();
+			}
+		}
+	}
+	return p_filename_path;
+}
+
+fs::path CMainFrame::SaveFileTxt()
+{
+	LOG_TRACE << __FUNCTION__;
+	char strFilter[] = { "log file  (*.log)|*.log|" };
+	fs::path p_filename_path;
+
+	CFileDialog FileDlg(FALSE, CString(".log"), NULL, 0, CString(strFilter));
+	if (FileDlg.DoModal() == IDOK) // this is the line which gives the errors
+	{
+		p_filename_path = FileDlg.GetFolderPath().GetBuffer();
+		p_filename_path.append(FileDlg.GetFileName().GetBuffer());
+
+		if (fs::exists(p_filename_path))
+		{
+			try
+			{
+				fs::remove(p_filename_path);
+			}
+			catch (std::filesystem::filesystem_error const& ex)
+			{
+				LOG_ERROR << __FUNCTION__ << "Unable to remove the file, file=" << p_filename_path << "exception:" << ex.what();
 				return fs::path();
 			}
 		}
@@ -258,7 +290,20 @@ void CMainFrame::OnButtonExport()
 				child.put(L"Description", addininfo.second.Description_);
 				child.put(L"Installed", addininfo.second.Installed_);
 				child.put(L"key", addininfo.second.key_);
-				child.put(L"parent", addininfo.second.parent_ == HKEY_LOCAL_MACHINE ? L"HKEY_LOCAL_MACHINE" : L"HKEY_CURRENT_USER");
+				
+				if (addininfo.second.parent_ == HKEY_LOCAL_MACHINE)
+				{
+					child.put(L"parent", L"HKEY_LOCAL_MACHINE");
+				}
+				else if(addininfo.second.parent_ == HKEY_CURRENT_USER)
+				{
+					child.put(L"parent", L"HKEY_CURRENT_USER");
+				}
+				else
+				{
+					child.put(L"parent", L"HKEY_USERS");
+				}
+				
 				child.put(L"AddInType", addininfo.second.addType_ == AddInType::OFFICE ? L"Office" : L"Excel");
 				child.put(L"LoadBehavior", std::to_wstring(addininfo.second.LoadBehavior_));
 				child.put(L"ProgId", addininfo.second.ProgId_);
@@ -312,4 +357,46 @@ void CMainFrame::OnButtonImport()
 	{
 		LOG_ERROR << __FUNCTION__ << "Unable to read the json file, file=" << p_filenamepath << "exception:" << diagnostic_information(ex);	
 	}
+}
+
+
+void CMainFrame::OnButtonExportLogs()
+{
+	LOG_TRACE << __FUNCTION__;
+	fs::path p_filenamepath;
+
+	try
+	{
+		p_filenamepath = SaveFileTxt();
+		if (p_filenamepath.empty() == false)
+		{
+			SaveLogs(p_filenamepath);
+
+		}
+	}
+	catch(std::exception ex)
+	{
+		LOG_ERROR << __FUNCTION__ << "Unable to save the log file, file=" << p_filenamepath << "exception:" << ex.what();
+	}
+}
+
+void CMainFrame::SaveLogs(fs::path p_filenamepath)
+{
+	USES_CONVERSION;
+
+	std::ofstream file_log;
+
+	file_log.open(p_filenamepath, std::ofstream::out);
+
+	auto i_items = m_wndOutput.m_wndOutputDebug.GetCount();
+	for (auto i = 0; i < i_items; i++)
+	{
+		CString s_value;
+		m_wndOutput.m_wndOutputDebug.GetText(i, s_value);
+		CStringA output = T2A(s_value);
+
+		file_log << output;
+		file_log << "\n";
+	}
+	file_log.close();
 }

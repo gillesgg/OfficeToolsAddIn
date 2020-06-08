@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Logger.h"
+#include "XLSingleton.h"
 
 
 
@@ -16,16 +17,22 @@ public:
 	{
 		std::ostringstream os;
 		os << "<" << rec[boost::log::trivial::severity] << "> " << fstring;
-		//::PostMessage(hwnd_, 0, 0, (LPARAM)strdup(os.str().c_str()));
+		HWND hwnd = XLSingleton::getInstance()->Get_Log_info();
+		if (hwnd != nullptr)
+		{
+			if (::IsWindow(hwnd))
+			{
+				::SendMessageA(hwnd, LB_ADDSTRING, NULL,(LPARAM) os.str().c_str());
+			}
+		}		
 	}
-
-	customlog_sink(HWND hwnd)
-		: hwnd_(hwnd)
+	customlog_sink()
 	{
 	}
 
+
 private:
-	HWND hwnd_;
+	
 };
 
 
@@ -76,20 +83,27 @@ BOOST_LOG_GLOBAL_LOGGER_INIT(logger, src::severity_logger_mt)
 																	 
 	typedef sinks::synchronous_sink<sinks::text_file_backend> TextSink; // add a text sink
 
+	typedef sinks::synchronous_sink< customlog_sink > sink_t;
+	boost::shared_ptr< sink_t > sink(new sink_t());
+	boost::shared_ptr< logging::core > core = logging::core::get();
+	core->add_sink(sink);
+
 //#if _DEBUG
 	typedef sinks::synchronous_sink<sinks::debug_output_backend> outputdebugstring_sink;
 	boost::shared_ptr<outputdebugstring_sink> output_sink(new outputdebugstring_sink());
 //#endif // _DEBUG
 	if (GetLog(pFileName) == S_OK)
 	{
+
+		
+
 		boost::shared_ptr<sinks::text_file_backend> backend1 = boost::make_shared<sinks::text_file_backend>(
 			keywords::file_name = pFileName.generic_string() + "sign_%Y-%m-%d_%H-%M-%S.%N.log",
 			keywords::rotation_size = 10 * 1024 * 1024,
 			keywords::time_based_rotation = sinks::file::rotation_at_time_point(0, 0, 0),
 			keywords::min_free_space = 30 * 1024 * 1024);
 
-		backend1->auto_flush(true);
-
+		backend1->auto_flush(true);	
 
 		boost::shared_ptr<TextSink> sink(new TextSink(backend1));
 
