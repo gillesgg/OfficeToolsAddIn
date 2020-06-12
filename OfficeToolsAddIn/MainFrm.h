@@ -24,6 +24,13 @@ protected: // create from serialization only
 	CMainFrame() noexcept;
 	DECLARE_DYNCREATE(CMainFrame)
 
+private:
+	void ExportFile(fs::path str_file_name);
+	std::wstring CreateUniqueFile();
+	fs::path GenerateTemporyFile();
+
+private:
+	fs::path temp_file_export_;
 // Attributes
 public:
 

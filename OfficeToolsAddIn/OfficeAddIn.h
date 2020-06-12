@@ -4,15 +4,20 @@
 class OfficeAddIn
 {
 public:
-	void DisableAllOfficeAddIn();
-	void ReadAddinInformation();
-	void SaveAddinInformation();
+	HRESULT		DisableAllOfficeAddIn(std::wstring temp_file_export);
+	HRESULT		ReadAddinInformation();
+	void		SaveAddinInformationToFile(fs::path temp_file_export);
+	fs::path	getDirectoryWithCurrentExecutable();
+	void		DisableAllOfficeAddinToMemory();
+	HRESULT		DisableCurrentOfficeAddIn(std::wstring temp_file_export);
 private:
-	void DisableOfficeAddin(ProcessInformation processinformation);
+	void DisableXLAddin(ProcessInformation processinformation);
 	void ReadAddInformation(HKEY parent, std::wstring siduserkey, std::wstring rootKey);
 	void ComputeAddInInformation(ProcessInformation& processinformation);
 	void DumpAddIninfo();
-	void WriteInformation(HKEY parent, std::wstring str_key, DWORD dw_value);
+	void WriteLoadBehaviorRegistryInformation(HKEY parent, std::wstring str_key, DWORD dw_value);
+	std::wstring makeKey(std::wstring siduserkey, std::wstring Progid);
+	void DisableOfficeAddinAdmin(fs::path  temp_file_export);
 
 private:
 	std::map<std::wstring, AddinInformation>		addinsInfo_;

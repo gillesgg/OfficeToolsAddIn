@@ -3,20 +3,21 @@
 #include "OfficeAddinInformation.h"
 #include "ExcelProcessInformation.h"
 #include "Logger.h"
+#include "Utility.h"
+#include "XLSingleton.h"
 
-HRESULT ExcelAutomation::DisableAllXLAddinInformation(ProcessInformation processinformation)
+HRESULT ExcelAddIn::DisableAllXLAddinInformation()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	HRESULT hr = S_OK;
 	try
 	{
 		auto pOfficeAddIns = _pXL->GetAddIns();
 		if (pOfficeAddIns == nullptr)
 		{
-			LOG_ERROR << __FUNCTION__ << " pOfficeAddIns is null";
+			LOG_ERROR << __FUNCTION__ << "- XL::GetAddIns is empty";
 			return E_FAIL;
-		}
-	
+		}	
 		for (int x = 1; x <= pOfficeAddIns->Count; x++)
 		{
 			VARIANT v;
@@ -26,9 +27,14 @@ HRESULT ExcelAutomation::DisableAllXLAddinInformation(ProcessInformation process
 
 			auto pOfficeAddin = pOfficeAddIns->Item[x];		
 			if (pOfficeAddin != nullptr)
-				pOfficeAddin->Installed = VARIANT_FALSE;			
+			{
+				pOfficeAddin->Installed = VARIANT_FALSE;
+				LOG_INFO << __FUNCTION__ << "-Disable the addin, Addin Name=" << pOfficeAddin->Name << " Description=" << pOfficeAddin->FullName;
+			}
 			else
-				LOG_ERROR << __FUNCTION__ << " pOfficeAddIn is null";
+			{
+				LOG_ERROR << __FUNCTION__ << "-XL::pOfficeAddIns->Item[x] is null";
+			}
 			pOfficeAddin = nullptr;
 			VariantClear(&v);
 		}
@@ -36,15 +42,15 @@ HRESULT ExcelAutomation::DisableAllXLAddinInformation(ProcessInformation process
 	}
 	catch (_com_error& ex)
 	{
-		LOG_ERROR << "error=" << ex.Description();
+		LOG_ERROR << __FUNCTION__ "-error message=" << Utility::FormatMessage(hr) << "-error description=" << ex.Description();
 		return ex.Error();
 	}
 	return (hr);
 }
 
-HRESULT ExcelAutomation::DisableAddin(ProcessInformation processinformation)
+HRESULT ExcelAddIn::DisableAddin()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 
 	HRESULT hr = S_OK;
 	
@@ -54,36 +60,34 @@ HRESULT ExcelAutomation::DisableAddin(ProcessInformation processinformation)
 		hr = _pXL.CreateInstance(L"Excel.Application");
 		if (FAILED(hr))
 		{
-			LOG_ERROR << __FUNCTION__ << " unable to create an Excel.Application instance" << " hr=" << hr;
+			LOG_ERROR << __FUNCTION__ << "-unable to create an Excel.Application instance message=" << Utility::FormatMessage(hr) << "HRESULT=" << "hr=" << hr ;
 			return hr;
 		}
 		_pXL->PutVisible(0, VARIANT_FALSE);
-		hr = DisableXLAddinInformation(processinformation);
+		hr = DisableXLAddinInformation();
 		_pXL->Quit();
 		_pXL = nullptr;
 	}
 	catch (_com_error& e)
 	{
-		LOG_ERROR << "error=" << e.Description();
+		LOG_ERROR << __FUNCTION__ << "-error=" << e.Description();
 		return e.Error();
 	}
 	return (hr);
 }
 
-
-HRESULT ExcelAutomation::DisableXLAddinInformation(ProcessInformation processinformation)
+HRESULT ExcelAddIn::DisableXLAddinInformation()
 {
-	LOG_TRACE << __FUNCTION__;
-
+	LOG_DEBUG << __FUNCTION__;
+	ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
 	try
 	{
 		auto pOfficeAddIns = _pXL->GetAddIns();
 		if (pOfficeAddIns == nullptr)
 		{
-			LOG_ERROR << __FUNCTION__ << " pOfficeAddIns is null";
+			LOG_ERROR << __FUNCTION__ << "-_pXL->GetAddIns is null";
 			return E_FAIL;
 		}
-
 		for (int x = 1; x <= pOfficeAddIns->Count; x++)
 		{
 			VARIANT v;
@@ -97,11 +101,14 @@ HRESULT ExcelAutomation::DisableXLAddinInformation(ProcessInformation processinf
 				auto bstr_clsid = pOfficeAddin->CLSID;
 				auto bstr_name = pOfficeAddin->Name;
 				std::wstring str_clsid = bstr_clsid.length() == 0 ? bstr_name : bstr_clsid;
+				
+				std::wstring str_sid = Utility::GetSIDInfoFromUser(Utility::get_system_user_name());
 
-				auto it = processinformation.addininformation_.find(str_clsid);
+				auto it = processinformation.addininformation_.find(str_sid + L"_" + str_clsid);
 				if (it != processinformation.addininformation_.end())
 				{
 					pOfficeAddin->Installed = it->second.Installed_ == L"True" ? VARIANT_TRUE : VARIANT_FALSE;
+					LOG_INFO << __FUNCTION__ << "-set the addin, Addin Name=" << it->second.Name_ << " Description=" << it->second.Description_ << " Installed=" << pOfficeAddin->Installed;
 				}
 			}
 			else
@@ -115,29 +122,27 @@ HRESULT ExcelAutomation::DisableXLAddinInformation(ProcessInformation processinf
 	}
 	catch (_com_error& e)
 	{
-		LOG_ERROR << "error=" << e.Description();
+		LOG_ERROR << __FUNCTION__ << "-error=" << e.Description();
 		return e.Error();
 	}
 	return (S_OK);
 }
 
-
-HRESULT ExcelAutomation::DisableAllAddin(ProcessInformation processinformation)
+HRESULT ExcelAddIn::DisableAllAddin()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	HRESULT hr = S_OK;
-
 	try
 	{
 		CoInitialize(0L);
 		hr = _pXL.CreateInstance(L"Excel.Application");
 		if (FAILED(hr))
 		{
-			LOG_ERROR << __FUNCTION__ << " unable to create an Excel.Application instance" << " hr=" << hr;
+			LOG_ERROR << __FUNCTION__ << "-unable to create an Excel.Application instance description=" << Utility::FormatMessage(hr) << " hr=" << hr;
 			return hr;
 		}
 		_pXL->PutVisible(0, VARIANT_FALSE);
-		hr = DisableAllXLAddinInformation(processinformation);
+		hr = DisableAllXLAddinInformation();
 		_pXL->Quit();
 		_pXL = nullptr;
 	}
@@ -148,10 +153,9 @@ HRESULT ExcelAutomation::DisableAllAddin(ProcessInformation processinformation)
 	}
 	return (hr);
 }
-HRESULT ExcelAutomation::ReadXLAddinInformation(ProcessInformation& processinformation)
+HRESULT ExcelAddIn::ReadXLAddinInformation(ProcessInformation& processinformation)
 {
-	LOG_TRACE << __FUNCTION__;
-
+	LOG_DEBUG << __FUNCTION__;
 	try
 	{
 		auto pOfficeAddIns = _pXL->GetAddIns();
@@ -160,7 +164,6 @@ HRESULT ExcelAutomation::ReadXLAddinInformation(ProcessInformation& processinfor
 				LOG_ERROR << __FUNCTION__ << " pOfficeAddIns is null";
 				return E_FAIL;
 		}
-
 		for (int x = 1; x <= pOfficeAddIns->Count; x++)
 		{
 			VARIANT v;
@@ -175,22 +178,22 @@ HRESULT ExcelAutomation::ReadXLAddinInformation(ProcessInformation& processinfor
 				return E_FAIL;
 			}
 			XLaddinInformation addinInformation;
-		
 
 			addinInformation.ProgId_ = pOfficeAddin->CLSID;
 			addinInformation.FullName_ = pOfficeAddin->FullName;
 			addinInformation.Name_ = pOfficeAddin->Name;
 			addinInformation.Description_ = pOfficeAddin->Title;
 			addinInformation.Installed_ = (pOfficeAddin->Installed == VARIANT_TRUE) ? L"True" : L"False";
-			addinInformation.addType_ = AddInType::XL;		
-
+			addinInformation.addType_ = AddInType::XL;	
+			addinInformation.str_account = Utility::get_system_user_name();
+			addinInformation.sid_account = Utility::GetSIDInfoFromUser(Utility::get_system_user_name());
+			
 			if (addinInformation.ProgId_.empty() == true)
 			{
 				addinInformation.ProgId_ = pOfficeAddin->Name;
 			}
-
-			processinformation.addininformation_.insert(std::make_pair(addinInformation.ProgId_, addinInformation));
-			LOG_TRACE << "description=" << addinInformation.Description_ << " progID=" << addinInformation.ProgId_;
+			processinformation.addininformation_.insert(std::make_pair(addinInformation.sid_account + L"_" + addinInformation.ProgId_, addinInformation));
+			LOG_INFO << "Add item to processinformation Key=" << addinInformation.sid_account + L"_" + addinInformation.ProgId_ << "Description=" << addinInformation.Description_ << " progID=" << addinInformation.ProgId_;
 			pOfficeAddin = nullptr;
 			VariantClear(&v);
 		}
@@ -198,16 +201,16 @@ HRESULT ExcelAutomation::ReadXLAddinInformation(ProcessInformation& processinfor
 	}
 	catch (_com_error& e)
 	{
-		LOG_ERROR << "error=" << e.Description();
+		LOG_ERROR << __FUNCTION__ << "-error=" << e.Description();
 		return e.Error();
 	}
 	return (S_OK);
 }
-HRESULT ExcelAutomation::ReadOfficeAddinInformation(ProcessInformation& processinformation)
+HRESULT ExcelAddIn::ReadOfficeAddinInformation(ProcessInformation& processinformation)
 {
 	try
 	{
-		LOG_TRACE << __FUNCTION__;
+		LOG_DEBUG << __FUNCTION__;
 		auto pXLAddIns = _pXL->GetCOMAddIns();
 		if (pXLAddIns == nullptr)
 		{
@@ -234,8 +237,12 @@ HRESULT ExcelAutomation::ReadOfficeAddinInformation(ProcessInformation& processi
 			addinInformation.ProgId_ = pXLAddin->ProgId;			
 			addinInformation.Installed_ = (pXLAddin->Connect == VARIANT_TRUE) ? L"True" : L"False";
 			addinInformation.addType_ = AddInType::OFFICE;		
-			processinformation.addininformation_.insert(std::make_pair(addinInformation.ProgId_, addinInformation));
-			LOG_TRACE << "description=" << addinInformation.Description_ << " progID=" << addinInformation.ProgId_;
+			addinInformation.sid_account = Utility::GetSIDInfoFromUser(Utility::get_system_user_name());
+			addinInformation.str_account = Utility::get_system_user_name();
+
+
+			processinformation.addininformation_.insert(std::make_pair(addinInformation.sid_account + L"_" + addinInformation.ProgId_, addinInformation));
+			LOG_INFO << "Add item to processinformation Key=" << addinInformation.sid_account + L"_" + addinInformation.ProgId_ << "Description=" << addinInformation.Description_ << " progID=" << addinInformation.ProgId_;
 			VariantClear(&v);
 			pXLAddin = nullptr;
 		}
@@ -243,12 +250,12 @@ HRESULT ExcelAutomation::ReadOfficeAddinInformation(ProcessInformation& processi
 	}
 	catch (_com_error& e)
 	{
-		LOG_ERROR << "error=" << e.Error();
+		LOG_ERROR << __FUNCTION__ << "-error=" << e.Error();
 		return e.Error();
 	}
 	return (S_OK);
 }
-HRESULT ExcelAutomation::ListInformations(ProcessInformation& processinformation)
+HRESULT ExcelAddIn::ListInformations(ProcessInformation& processinformation)
 {
 	HRESULT hr =S_OK;
 
@@ -263,7 +270,7 @@ HRESULT ExcelAutomation::ListInformations(ProcessInformation& processinformation
 		hr = _pXL.CreateInstance(L"Excel.Application");
 		if (FAILED(hr))
 		{
-			LOG_ERROR << __FUNCTION__ << " unable to create an Excel.Application instance" << " hr=" << hr;
+			LOG_ERROR << __FUNCTION__ << "-unable to create an Excel.Application instance description=" << Utility::FormatMessage(hr) << " hr=" << hr;
 			return hr;
 		}
 		_pXL->PutVisible(0, VARIANT_FALSE);

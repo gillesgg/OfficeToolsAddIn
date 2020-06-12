@@ -16,7 +16,7 @@ int case_insensitive_match(std::wstring s1, std::wstring s2)
 
 int ExcelProcessInformation::ShowModules(DWORD processID, ProcessInformation& processinformation)
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	
 	HMODULE h_mods[1024];
 	DWORD cbNeeded = 0;
@@ -25,7 +25,7 @@ int ExcelProcessInformation::ShowModules(DWORD processID, ProcessInformation& pr
 
 	if (nullptr == h_process)
 	{
-		LOG_ERROR << __FUNCTION__ << " OpenProcess Failed GetLastError=" << GetLastError();
+		LOG_DEBUG << __FUNCTION__ << " OpenProcess Failed GetLastError=" << GetLastError();
 		return HRESULT_FROM_WIN32(GetLastError());
 	}	
 	if (EnumProcessModules(h_process, h_mods, sizeof(h_mods), &cbNeeded))
@@ -38,7 +38,7 @@ int ExcelProcessInformation::ShowModules(DWORD processID, ProcessInformation& pr
 				if (szModName != nullptr)
 				{
 					processinformation.modules_.push_back(szModName);
-					LOG_TRACE << "module=" << szModName;
+					LOG_DEBUG << "module=" << szModName;
 				}               
 			}
 		}
@@ -49,14 +49,14 @@ int ExcelProcessInformation::ShowModules(DWORD processID, ProcessInformation& pr
 
 HRESULT ExcelProcessInformation::ShowProcesses(const std::wstring filter, ProcessInformation& processinformation)
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	
 	DWORD aProcesses[MAX_NUM];
 	DWORD cb_needed;
 
 	if (!EnumProcesses(aProcesses, sizeof(aProcesses), &cb_needed))
 	{    	
-		LOG_ERROR << __FUNCTION__ << " EnumProcesses Failed GetLastError=" << GetLastError();
+		LOG_DEBUG << __FUNCTION__ << " EnumProcesses Failed GetLastError=" << GetLastError();
 		HRESULT_FROM_WIN32(GetLastError());
 	}
 	DWORD c_processes = cb_needed / sizeof(DWORD);	
@@ -84,10 +84,10 @@ HRESULT ExcelProcessInformation::ShowProcesses(const std::wstring filter, Proces
 				}
 				CloseHandle(h_process);
 			}
-			else
-			{
-				LOG_TRACE << __FUNCTION__ << " OpenProcesses Failed GetLastError=" << GetLastError();
-			}
+			//else
+			//{
+			//	//LOG_TRACE << __FUNCTION__ << " OpenProcesses Failed GetLastError=" << GetLastError();
+			//}
 		}
 	}
 	return S_OK;

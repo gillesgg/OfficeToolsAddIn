@@ -3,293 +3,188 @@
 #include "XLSingleton.h"
 #include "OfficeAddinInformation.h"
 #include "ExcelAutomation.h"
+#include "ExcelOfficeAddIn.h"
 #include "Logger.h"
+#include "Utility.h"
 
-
-#define	IS_KEY_LEN 512
-
-void OfficeAddIn::DisableAllOfficeAddIn()
+#pragma region DisableAllAdd-in
+/// <summary>
+/// Disable all COM Add-in and Excel Add-in
+/// </summary>
+/// <param name="temp_file_export"></param>
+/// <returns></returns>
+HRESULT OfficeAddIn::DisableAllOfficeAddIn(std::wstring temp_file_export)
 {
-	LOG_TRACE << __FUNCTION__;
-	ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
+	LOG_DEBUG << __FUNCTION__;
 
+	ExcelAddIn			xlAddin;
+	ExcelCOMAddIn		xlComAddin;
+	HRESULT				hr = S_OK;
+
+	DisableAllOfficeAddinToMemory();
+	SaveAddinInformationToFile(temp_file_export);
+
+	DumpAddIninfo();
+
+	hr = xlAddin.DisableAllAddin();
+	hr = xlComAddin.DisableAllAddin();
+	hr = xlComAddin.DisableOfficeAddinAdmin(temp_file_export);
+	
+	return hr;
+}
+/// <summary>
+/// Disable COM Add-in and Excel Add-in to the singleton
+/// </summary>
+void OfficeAddIn::DisableAllOfficeAddinToMemory()
+{
+	LOG_DEBUG << __FUNCTION__;
+
+	ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
 	for (auto it = processinformation.addininformation_.begin(); it != processinformation.addininformation_.end(); it++)
 	{
 		if (it->second.addType_ == AddInType::OFFICE)
 		{
-			LOG_TRACE << "Disable Addin Name=" << it->second.Name_ << " Description=" << it->second.Description_;
-
+			LOG_INFO << "Disable Addin Name=" << it->second.sid_account + L"_" + it->second.ProgId_ << "Description=" << it->second.Description_ << " progID=" << it->second.ProgId_;
 			it->second.LoadBehavior_ = 0; //Unloaded-Do not load automatically
-			WriteInformation(it->second.parent_, it->second.key_, it->second.LoadBehavior_);
 		}
 		if (it->second.addType_ == AddInType::XL)
 		{
 			it->second.Installed_ = L"False";
-			LOG_TRACE << "Disable Addin Name=" << it->second.Name_ << " Description=" << it->second.Description_;
+			LOG_INFO << "Disable Addin Name=" << it->second.sid_account + L"_" + it->second.ProgId_ << "Description=" << it->second.Description_ << " progID=" << it->second.ProgId_;
 		}
 	}
 	XLSingleton::getInstance()->Set_Addin_info(processinformation);
-
-	ExcelAutomation xl;
-	xl.DisableAllAddin(processinformation);
-}
-void OfficeAddIn::DisableOfficeAddin(ProcessInformation processinformation)
-{
-	LOG_TRACE << __FUNCTION__;	
-	ExcelAutomation xl;
-	xl.DisableAddin(processinformation);
 }
 
-void OfficeAddIn::WriteInformation(HKEY parent, std::wstring str_key, DWORD dw_value)
+/// <summary>
+/// Save AddIn state to file for interprocess elevation scenario
+/// </summary>
+/// <param name="temp_file_export"></param>
+void OfficeAddIn::SaveAddinInformationToFile(fs::path temp_file_export)
 {
-	LOG_TRACE << __FUNCTION__;
-
-	LSTATUS status;
-	CRegKey key;
-
-	status = key.Open(parent, str_key.c_str(), KEY_WRITE);
-	if (ERROR_SUCCESS == status)
-	{
-		status = key.SetDWORDValue(L"LoadBehavior", dw_value);
-		if (ERROR_SUCCESS != status)
-		{
-			LOG_ERROR << __FUNCTION__ << " unable to save the value" << " key:" << str_key << " value:" << dw_value << " status:" << status;
-		}
-	}
-	else
-	{
-		LOG_ERROR << __FUNCTION__ << " unable to write the value" << " key:" << str_key << " value:" << dw_value << " status:" << status;
-	}
-}
-std::list<std::wstring> EnumerateUserNames()
-{
-	LOG_TRACE << __FUNCTION__;
-
-	CRegKey key;
-	CRegKey keyinformation;
-	DWORD dwIndex = 0;
-	DWORD cbName = IS_KEY_LEN;
-	WCHAR szSubKeyName[IS_KEY_LEN] = { 0 };
-	LONG lRet;
-
-	std::list<std::wstring> listusers;
-	LSTATUS status;
-
-	status = key.Open(HKEY_USERS, nullptr, KEY_READ);
-	if (ERROR_SUCCESS == status)
-	{
-		while ((lRet = key.EnumKey(dwIndex, szSubKeyName, &cbName)) != ERROR_NO_MORE_ITEMS)
-		{
-
-			listusers.push_back(szSubKeyName);
-
-			dwIndex++;
-			cbName = IS_KEY_LEN;
-		}
-		key.Close();
-	}
-	else
-	{
-		LOG_ERROR << __FUNCTION__ << " unable to open the key:" << "HKEY_USERS" << " status:" << status;
-	}
-
-	return listusers;
-}
-
-void OfficeAddIn::ReadAddinInformation()
-{
-	LOG_TRACE << __FUNCTION__;
+	pt::wptree root;
 
 	ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
 
+	try
+	{
+		root.put(L"ImageType", processinformation.imagetype_ == ImageType::x64 ? L"X64" : L"X86");
+		root.put(L"Name", processinformation.Name_);
+		pt::wptree children;
+		for (auto& addininfo : processinformation.addininformation_)
+		{
+			pt::wptree child;
+			child.put(L"Description", addininfo.second.Description_);
+			child.put(L"Installed", addininfo.second.Installed_);
+			child.put(L"key", addininfo.second.key_);
+			if (addininfo.second.parent_ == HKEY_LOCAL_MACHINE)
+			{
+				child.put(L"parent", L"HKEY_LOCAL_MACHINE");
+			}
+			else if (addininfo.second.parent_ == HKEY_CURRENT_USER)
+			{
+				child.put(L"parent", L"HKEY_CURRENT_USER");
+			}
+			else
+			{
+				child.put(L"parent", L"HKEY_USERS");
+			}
+
+			child.put(L"AddInType", addininfo.second.addType_ == AddInType::OFFICE ? L"Office" : L"Excel");
+			child.put(L"LoadBehavior", std::to_wstring(addininfo.second.LoadBehavior_));
+			child.put(L"ProgId", addininfo.second.ProgId_);
+
+			child.put(L"SID", addininfo.second.sid_account);
+			child.put(L"UserName", addininfo.second.str_account);
+			children.push_back(std::make_pair(L"", child));
+		}
+		root.add_child(L"AddinInformation", children);
+		pt::write_json(temp_file_export.generic_string(), root);
+	}
+	catch (boost::exception const& ex)
+	{
+		LOG_ERROR << __FUNCTION__ << "-Unable to write the json file, file=" << temp_file_export << " exception=" << diagnostic_information(ex);
+	}
+
+	//LOG_DEBUG << __FUNCTION__;
+	//ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
+	//for (auto it = processinformation.addininformation_.begin(); it != processinformation.addininformation_.end(); it++)
+	//{
+	//	if (it->second.addType_ == AddInType::OFFICE)
+	//	{
+	//		if ((it->second.parent_ != HKEY_LOCAL_MACHINE))
+	//		{
+	//			//WriteLoadBehaviorRegistryInformation(it->second.parent_, it->second.key_, it->second.LoadBehavior_);
+	//		}
+	//		else
+	//		{
+	//			LOG_TRACE << __FUNCTION__ << " Admin key " << " Key=" << it->second.key_ << " LoadBehavior=" << it->second.LoadBehavior_;
+	//		}
+	//	}
+	//}
+}
+
+#pragma endregion
+//void OfficeAddIn::DisableXLAddin(ProcessInformation processinformation)
+//{
+//	LOG_DEBUG << __FUNCTION__;	
+//	ExcelAddIn xl;
+//	xl.DisableAddin(processinformation);
+//}
+#pragma region Get Add-in information
+/// <summary>
+/// Get Office AddinInformation from the XL object model and from the registy
+/// </summary>
+/// <returns></returns>
+HRESULT OfficeAddIn::ReadAddinInformation()
+{
+	LOG_DEBUG << __FUNCTION__;
+	HRESULT hr = S_OK;
+
+	ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
 	processinformation.addininformation_.clear();
 	processinformation.modules_.clear();
 
-	ExcelAutomation automation;
-	automation.ListInformations(processinformation);
+	ExcelAddIn	xl;
+	ExcelCOMAddIn xlComAddin;
 
-	auto users = EnumerateUserNames();
-
-	for (auto user : users)
+	if FAILED(hr = xl.ListInformations(processinformation))
 	{
-		ReadAddInformation(HKEY_USERS,user, user + L"\\SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
-		ReadAddInformation(HKEY_USERS, user, user + L"\\SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Microsoft\\Office\\Excel\\Addins");
-		ReadAddInformation(HKEY_USERS, user, user + L"\\SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Wow6432Node\\Microsoft\\Office\\Excel\\Addins");
-
+		return hr;
 	}
-	ReadAddInformation(HKEY_CURRENT_USER,L"", L"SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
-	ReadAddInformation(HKEY_LOCAL_MACHINE, L"", L"SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
-	ReadAddInformation(HKEY_LOCAL_MACHINE, L"", L"SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Microsoft\\Office\\Excel\\Addins");
-	ReadAddInformation(HKEY_LOCAL_MACHINE, L"", L"SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Wow6432Node\\Microsoft\\Office\\Excel\\Addins");
 	
+	auto sid_users = xlComAddin.EnumerateProfileNames();
+
+	LOG_TRACE << __FUNCTION__ << "-read Addins information for the current user" << ", user name =" << Utility::get_system_user_name() << " sid name=" << Utility::GetSIDInfoFromUser(Utility::get_system_user_name());
+
+	xlComAddin.ReadAddInformation(addinsInfo_, HKEY_CURRENT_USER,L"", L"SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
+	xlComAddin.ReadAddInformation(addinsInfo_, HKEY_LOCAL_MACHINE, L"", L"SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
+	xlComAddin.ReadAddInformation(addinsInfo_, HKEY_LOCAL_MACHINE, L"", L"SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Microsoft\\Office\\Excel\\Addins");
+	xlComAddin.ReadAddInformation(addinsInfo_, HKEY_LOCAL_MACHINE, L"", L"SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Wow6432Node\\Microsoft\\Office\\Excel\\Addins");
+
+	for (auto sid_user : sid_users)
+	{
+
+		LOG_TRACE << __FUNCTION__ << "-read Addins information for the user" << ", user name =" << Utility::GetUserInfo(sid_user) << ", sid name=" << sid_user;
+		xlComAddin.ReadAddInformation(addinsInfo_, HKEY_USERS, sid_user, sid_user + L"\\SOFTWARE\\Microsoft\\Office\\Excel\\Addins");
+		xlComAddin.ReadAddInformation(addinsInfo_, HKEY_USERS, sid_user, sid_user + L"\\SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Microsoft\\Office\\Excel\\Addins");
+		xlComAddin.ReadAddInformation(addinsInfo_, HKEY_USERS, sid_user, sid_user + L"\\SOFTWARE\\Microsoft\\Office\\ClickToRun\\REGISTRY\\MACHINE\\Software\\Wow6432Node\\Microsoft\\Office\\Excel\\Addins");
+	}
 	ComputeAddInInformation(processinformation);
 	XLSingleton::getInstance()->Set_Addin_info(processinformation);
+
+	return (hr);
 }
-
-
-std::wstring get_system_user_name()
-{
-	std::wstring result;
-	const size_t initial_buf_size = 128;
-	std::vector<wchar_t> buffer(initial_buf_size, 0);
-	ULONG char_count = static_cast<ULONG>(buffer.size() - 1);
-	const EXTENDED_NAME_FORMAT fmt = NameSamCompatible;
-	if (!GetUserNameEx(fmt, &buffer[0], &char_count) && ERROR_MORE_DATA == ::GetLastError() && char_count > 0)
-	{
-		buffer.resize(char_count + 1, 0);
-		if (!GetUserNameEx(fmt, &buffer[0], &char_count))
-			return L"";
-	}
-
-	if (char_count > 0)
-		result = &buffer[0];
-
-	return result;
-}
-
-HRESULT GetUserInfo(std::wstring sid_str, std::wstring& str_name, std::wstring& str_domain)
-{
-	SID_NAME_USE user_type;
-	PSID sid = NULL;
-	HRESULT ret = E_FAIL;
-	if (ConvertStringSidToSid(sid_str.c_str(), &sid)) 
-	{
-		DWORD name_size = 0, domain_size = 0;
-		if (!LookupAccountSid(NULL, sid, NULL, &name_size, NULL,&domain_size, &user_type) && ERROR_INSUFFICIENT_BUFFER != GetLastError()) 
-		{
-			LocalFree(sid);
-			return(HRESULT_FROM_WIN32(GetLastError()));
-		}
-		wchar_t* c_name = new wchar_t[name_size];
-
-		if (!c_name) 
-		{
-			LocalFree(sid);
-			return E_OUTOFMEMORY;
-		}
-
-		wchar_t* c_domain = new wchar_t[domain_size];		
-		if (!c_domain) 
-		{
-			delete[] c_name;
-			LocalFree(sid);
-			return E_OUTOFMEMORY;
-		}
-
-		if (LookupAccountSid(NULL, sid, c_name, &name_size, c_domain,&domain_size, &user_type)) 
-		{
-			ret = S_OK;
-			str_name = c_name;
-			str_domain = c_domain;
-		}
-		else 
-		{
-			return(HRESULT_FROM_WIN32(GetLastError()));
-		}
-
-		delete[] c_name;
-		delete[] c_domain;
-		LocalFree(sid);
-	}
-	return ret;
-}
-
-void OfficeAddIn::ReadAddInformation(HKEY parent,std::wstring siduserkey, std::wstring rootKey)
-{
-	LOG_TRACE << __FUNCTION__;
-
-	CRegKey key;
-	CRegKey keyinformation;
-	DWORD dwIndex = 0;
-	DWORD cbName = IS_KEY_LEN;
-	WCHAR szSubKeyName[IS_KEY_LEN] = { 0 };
-	LONG lRet;
-
-	LSTATUS status;
-
-	status = key.Open(parent, rootKey.c_str(), KEY_READ);
-	if (ERROR_SUCCESS == status)
-	{
-		while ((lRet = key.EnumKey(dwIndex, szSubKeyName, &cbName)) != ERROR_NO_MORE_ITEMS)
-		{
-
-			AddinInformation info;
-			DWORD dvalue;
-
-			if (lRet == ERROR_SUCCESS)
-			{
-				info.Progid_ = szSubKeyName;
-				info.Software_ = L"Excel";
-
-				std::wstring infoPlugIn = rootKey + L"\\" + info.Progid_;
-				status = keyinformation.Open(parent, infoPlugIn.c_str(), KEY_READ);
-				if (ERROR_SUCCESS == status)
-				{
-					WCHAR path_buff[MAX_PATH] = { 0 };
-					ULONG len = sizeof(path_buff);
-
-					if (keyinformation.QueryStringValue(L"Description", path_buff, &len) == ERROR_SUCCESS)
-					{
-						info.Description_ = path_buff;
-					}
-					len = sizeof(path_buff);
-					if (keyinformation.QueryDWORDValue(L"LoadBehavior", dvalue) == ERROR_SUCCESS)
-					{
-						info.Startmode_ = dvalue;
-					}
-
-					len = sizeof(path_buff);
-					std::wstring str_name;
-					std::wstring str_domain;
-
-					if (keyinformation.QueryStringValue(L"FriendlyName", path_buff, &len) == ERROR_SUCCESS)
-					{
-						info.FriendlyName_ = path_buff;
-					}
-					
-					info.Key_ = infoPlugIn;
-					info.Parent_ = parent;
-
-					
-
-					if (siduserkey.empty())
-					{
-						info.str_account_ = get_system_user_name();
-					}
-					else
-					{
-						if (SUCCEEDED(GetUserInfo(siduserkey, str_name, str_domain)))
-						{
-							info.str_account_ = str_domain + L"\\" + str_name;
-						}
-					}
-					
-
-					keyinformation.Close();
-				}
-			}
-			dwIndex++;
-			cbName = IS_KEY_LEN;
-
-			if (addinsInfo_.count(info.FriendlyName_) == 0)
-			{
-				addinsInfo_.insert(std::make_pair(info.Progid_, info));
-			}
-		}
-		key.Close();
-	}
-	else
-	{
-		LOG_ERROR << __FUNCTION__ << " unable to open the key:" << rootKey << " status:" << status;
-	}
-}
+/// <summary>
+/// Merge Office AddinInformation - XL Object model + COM registry information
+/// </summary>
+/// <param name="processinformation"></param>
 void OfficeAddIn::ComputeAddInInformation(ProcessInformation& processinformation)
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 
 	std::map<std::wstring, XLaddinInformation>::iterator it;
 
-	DumpAddIninfo();
 
 	for (it = processinformation.addininformation_.begin(); it != processinformation.addininformation_.end(); it++)
 	{
@@ -303,54 +198,95 @@ void OfficeAddIn::ComputeAddInInformation(ProcessInformation& processinformation
 			if (!it->second.ProgId_.empty())
 			{
 
-				std::map<std::wstring, AddinInformation >::iterator i = addinsInfo_.find(it->second.ProgId_);
+				std::map<std::wstring, AddinInformation >::iterator i = addinsInfo_.find(it->first);
 				if (i != addinsInfo_.end())
 				{
 					it->second.LoadBehavior_ = i->second.Startmode_;
 					it->second.parent_ = i->second.Parent_;
 					it->second.key_ = i->second.Key_;
 					it->second.str_account = i->second.str_account_;
+					it->second.sid_account = i->second.sid_account;
 				}
 				else
 				{
-					LOG_ERROR << "Unable to map ProgID=" << it->second.ProgId_;
+					LOG_DEBUG << "Unable to map ProgID=" << it->second.ProgId_;
 				}
 			}
 			else
 			{
-				LOG_ERROR << "Unable to map Description is empty";
+				LOG_DEBUG << "Unable to map Description is empty";
 			}
 		}
 		else
 		{
 			it->second.LoadBehavior_ = 100;
 			it->second.parent_ = nullptr;
-			it->second.key_ = L"";					
-			it->second.str_account = get_system_user_name();
-			
+			it->second.key_ = L"";
 		}
 	}
 }
+#pragma endregion
 
 
-void OfficeAddIn::SaveAddinInformation()
+
+HRESULT OfficeAddIn::DisableCurrentOfficeAddIn(std::wstring temp_file_export)
 {
-	LOG_TRACE << __FUNCTION__;
-	ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
-	for (auto it = processinformation.addininformation_.begin(); it != processinformation.addininformation_.end(); it++)
-	{
-		if (it->second.addType_ == AddInType::OFFICE)
-		{
-			WriteInformation(it->second.parent_, it->second.key_, it->second.LoadBehavior_);
-		}
-	}
-	DisableOfficeAddin(processinformation);
+	LOG_DEBUG << __FUNCTION__;
+
+	ExcelAddIn			xlAddin;
+	ExcelCOMAddIn		xlComAddin;
+	HRESULT				hr = S_OK;
+
+	DumpAddIninfo();
+
+	SaveAddinInformationToFile(temp_file_export);
+
+	
+
+	hr = xlAddin.DisableAddin();
+	hr = xlComAddin.DisableAllAddin();
+	hr = xlComAddin.DisableOfficeAddinAdmin(temp_file_export);
+
+	return (hr);
 }
+
+//std::wstring OfficeAddIn::makeKey(std::wstring siduserkey, std::wstring Progid)
+//{
+//	std::wstring username;
+//
+//	if (siduserkey.empty() == true)
+//	{
+//		username = Utility::get_system_user_name();
+//
+//	}
+//	else
+//	{
+//		std::wstring str_name;
+//		std::wstring str_domain;
+//		username = Utility::GetUserInfo(siduserkey);
+//	}
+//	return username + L"\\" + Progid;
+//}
 
 void OfficeAddIn::DumpAddIninfo()
 {
-	for (auto addin : addinsInfo_)
+	ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
+	for (auto item : processinformation.addininformation_)
 	{
-		LOG_TRACE << L"Description=" << addin.second.Description_ << L" --progID=" << addin.second.Progid_ << L" --FriendlyName=" << addin.second.FriendlyName_ << L" --type:" << L"Office";
+		LOG_TRACE	<< "Key=" 
+					<< item.first 
+					<< " --AddinType=" 
+					<< (int) item.second.addType_ 
+					<< " --Description=" 
+					<< item.second.Description_ 
+					<< " --FullName=" 
+					<< item.second.FullName_ 
+					<< " --key" 
+					<< item.second.key_ 
+					<< " --Name" 
+					<< item.second.Name_ 
+					<< " --sid=" 
+					<< item.second.sid_account;
 	}
 }
+

@@ -67,7 +67,10 @@ void COfficeToolsAddInView::OnUpdateRendererExcelAddIn(CCmdUI* pCmdUI)
 		auto i_pos = GetSelectedItem();
 		if (i_pos != NO_SELECTION)
 		{
-			auto str_load = ResolveItemAddInExcel(GetListCtrl().GetItemText(i_pos, ListItem::ProgId).GetBuffer());
+			CString str_item = GetListCtrl().GetItemText(i_pos, ListItem::Sid) + L"_" + GetListCtrl().GetItemText(i_pos, ListItem::ProgId);
+
+
+			auto str_load = ResolveItemAddInExcel(str_item.GetBuffer());
 			if (str_load == L"True" && pCmdUI->m_nID == ID_CHANGECONNECTMODE_YES)
 			{
 				pCmdUI->SetCheck(TRUE);
@@ -95,7 +98,10 @@ void COfficeToolsAddInView::OnUpdateRendererOfficeAddIn(CCmdUI* pCmdUI)
 
 		if (i_pos != NO_SELECTION)
 		{
-			auto i_value = ResolveItemAddInOffice(GetListCtrl().GetItemText(i_pos, ListItem::ProgId).GetBuffer());
+			CString str_item = GetListCtrl().GetItemText(i_pos, ListItem::Sid) + L"_" + GetListCtrl().GetItemText(i_pos, ListItem::ProgId);
+
+
+			auto i_value = ResolveItemAddInOffice(str_item.GetBuffer());
 			if (i_value != 200 && pCmdUI->m_nID == i_value)
 			{
 				pCmdUI->SetCheck(TRUE);
@@ -162,7 +168,7 @@ AddInType COfficeToolsAddInView::GetSelectionAddInType()
 
 std::wstring COfficeToolsAddInView::ResolveItemAddInExcel(std::wstring ProgID)
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 
 	ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
 	if (processinformation.addininformation_.size() > 0 && processinformation.addininformation_.count(ProgID) > 0)
@@ -174,7 +180,7 @@ std::wstring COfficeToolsAddInView::ResolveItemAddInExcel(std::wstring ProgID)
 
 UINT COfficeToolsAddInView::ResolveItemAddInOffice(std::wstring ProgID)
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 
 	ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
 	if (processinformation.addininformation_.size() > 0 && processinformation.addininformation_.count(ProgID) > 0)
@@ -221,7 +227,7 @@ UINT COfficeToolsAddInView::ResolveLoadOfficeAddIn(DWORD LoadBehavior)
 
 BOOL COfficeToolsAddInView::PreCreateWindow(CREATESTRUCT& cs)
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 
 	cs.style |= LVS_REPORT;
 	return CListView::PreCreateWindow(cs);
@@ -229,7 +235,7 @@ BOOL COfficeToolsAddInView::PreCreateWindow(CREATESTRUCT& cs)
 
 void COfficeToolsAddInView::OnInitialUpdate()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 
 	CListView::OnInitialUpdate();
 	CreateHeaders();
@@ -253,7 +259,7 @@ void COfficeToolsAddInView::OnContextMenu(CWnd* /* pWnd */, CPoint point)
 
 std::wstring COfficeToolsAddInView::ResolveStartMode(DWORD startmode)
 {
-	LOG_TRACE << __FUNCTION__;
+	//LOG_DEBUG << __FUNCTION__;
 
 	switch (startmode)
 	{
@@ -290,7 +296,7 @@ std::wstring COfficeToolsAddInView::ResolveStartMode(DWORD startmode)
 
 void COfficeToolsAddInView::CreateHeaders()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 
 	int x = 0;
 
@@ -303,11 +309,12 @@ void COfficeToolsAddInView::CreateHeaders()
 	this->GetListCtrl().InsertColumn(x++, L"Startup type", LVCFMT_LEFT, 300);
 	this->GetListCtrl().InsertColumn(x++, L"Registry location", LVCFMT_LEFT, 600);
 	this->GetListCtrl().InsertColumn(x++, L"Account", LVCFMT_LEFT, 300);
+	this->GetListCtrl().InsertColumn(x++, L"SID", LVCFMT_LEFT, 300);
 }
 
 void COfficeToolsAddInView::ShowAddIns()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 
 	int x = 0;
 
@@ -380,6 +387,11 @@ void COfficeToolsAddInView::ShowAddIns()
 		lvi.iSubItem = 7;
 		lvi.pszText = (wchar_t*)item.second.str_account.c_str();
 		this->GetListCtrl().SetItem(&lvi);
+
+
+		lvi.iSubItem = 8;
+		lvi.pszText = (wchar_t*)item.second.sid_account.c_str();
+		this->GetListCtrl().SetItem(&lvi);
 	}	
 }
 #pragma region UpdateAddInParameters
@@ -390,14 +402,18 @@ void COfficeToolsAddInView::ShowAddIns()
 /// <param name="nID"></param>
 void COfficeToolsAddInView::OnChangestartOfficeStartUp(UINT nID)
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 
 	POSITION p_pos = this->GetListCtrl().GetFirstSelectedItemPosition();
 	if (p_pos != nullptr)
 	{
 		auto i_pos = this->GetListCtrl().GetNextSelectedItem(p_pos);
-		auto str_prog_id = GetListCtrl().GetItemText(i_pos, 1);
-		UpdateItemAddInOffice(str_prog_id.GetBuffer(), nID);
+		auto str_prog_id = GetListCtrl().GetItemText(i_pos, ListItem::ProgId);
+		auto str_sid = GetListCtrl().GetItemText(i_pos, ListItem::Sid);
+
+		CString strkey = str_sid + L"_" + str_prog_id;
+
+		UpdateItemAddInOffice(strkey.GetBuffer(), nID);
 	}
 }
 /// <summary>
@@ -411,7 +427,9 @@ void COfficeToolsAddInView::OnChangestartExcelStartUp(UINT nID)
 	{
 		auto i_pos = this->GetListCtrl().GetNextSelectedItem(p_pos);
 		auto str_prog_id = GetListCtrl().GetItemText(i_pos, ListItem::ProgId);
-		UpdateItemAddInXL(str_prog_id.GetBuffer(), nID);
+		auto str_sid = GetListCtrl().GetItemText(i_pos, ListItem::Sid);
+		CString strkey = str_sid + L"_" + str_prog_id;
+		UpdateItemAddInXL(strkey.GetBuffer(), nID);
 	}
 }
 /// <summary>
@@ -421,7 +439,7 @@ void COfficeToolsAddInView::OnChangestartExcelStartUp(UINT nID)
 /// <param name="nID"></param>
 void COfficeToolsAddInView::UpdateItemAddInXL(std::wstring ProgID, UINT nID)
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
 	if (processinformation.addininformation_.size() > 0 && processinformation.addininformation_.count(ProgID) > 0)
 	{
@@ -440,7 +458,7 @@ void COfficeToolsAddInView::UpdateItemAddInXL(std::wstring ProgID, UINT nID)
 /// <param name="nID"></param>
 void COfficeToolsAddInView::UpdateItemAddInOffice(std::wstring ProgID,UINT nID )
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
 	if (processinformation.addininformation_.size() > 0 && processinformation.addininformation_.count(ProgID) > 0)
 	{
@@ -457,7 +475,7 @@ void COfficeToolsAddInView::UpdateItemAddInOffice(std::wstring ProgID,UINT nID )
 
 void COfficeToolsAddInView::UpdateListView(int i_sub_item, std::wstring str_item_value)
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	POSITION p_pos = this->GetListCtrl().GetFirstSelectedItemPosition();
 	if (p_pos != nullptr)
 	{
@@ -562,9 +580,9 @@ void COfficeToolsAddInView::OnNMCustomdraw(NMHDR* pNMHDR, LRESULT* pResult)
 	{
 		auto row_item = pLVCD->nmcd.dwItemSpec;
 
-		
+		CString str_item = GetListCtrl().GetItemText(row_item, ListItem::Sid) + L"_" + GetListCtrl().GetItemText(row_item, ListItem::ProgId);
 
-		auto rgb_value = ResolveItemColor(GetListCtrl().GetItemText(row_item, ListItem::ProgId).GetBuffer());
+		auto rgb_value = ResolveItemColor(str_item.GetBuffer());
 
 		if (rgb_value != RGB(0,0,0))
 			pLVCD->clrText = rgb_value;

@@ -9,7 +9,10 @@ enum ListItem
 	Location,
 	Type,
 	Load,
-	StartupType
+	StartupType,
+	RegistryLocation,
+	Account,
+	Sid,
 };
 
 

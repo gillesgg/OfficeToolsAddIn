@@ -11,7 +11,7 @@
 #include "Logger.h"
 #include "XLSingleton.h"
 #include "OfficeAddIn.h"
-
+#include "Utility.h"
 XLSingleton* XLSingleton::instance = 0;
 
 #ifdef _DEBUG
@@ -36,6 +36,17 @@ CMainFrame::CMainFrame() noexcept
 
 CMainFrame::~CMainFrame()
 {
+	if (fs::exists(temp_file_export_))
+	{
+		try
+		{
+			fs::remove(temp_file_export_);
+		}
+		catch (std::filesystem::filesystem_error const& ex)
+		{
+			LOG_ERROR << __FUNCTION__ << "Unable to remove the file, file=" << temp_file_export_ << "exception:" << ex.what();
+		}
+	}
 	::ExitProcess(0);
 }
 
@@ -49,7 +60,7 @@ void CMainFrame::OnUpdateFrameTitle(BOOL Nada)
 
 int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 
 	if (CFrameWndEx::OnCreate(lpCreateStruct) == -1)
 		return -1;
@@ -152,15 +163,17 @@ void CMainFrame::OnSettingChange(UINT uFlags, LPCTSTR lpszSection)
 
 void CMainFrame::OnButtonRefresh()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 
 	OfficeAddIn office_add_in;
 
 	BeginWaitCursor();
-	office_add_in.ReadAddinInformation();
-	if (nullptr != GetActiveView())
+	if (SUCCEEDED(office_add_in.ReadAddinInformation()))
 	{
-		(dynamic_cast<COfficeToolsAddInView*>(GetActiveView()))->ShowAddIns();
+		if (nullptr != GetActiveView())
+		{
+			(dynamic_cast<COfficeToolsAddInView*>(GetActiveView()))->ShowAddIns();
+		}
 	}
 	EndWaitCursor();
 
@@ -168,38 +181,48 @@ void CMainFrame::OnButtonRefresh()
 
 void CMainFrame::OnButtonDisable()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	
+	BeginWaitCursor();
+
 	OfficeAddIn office_add_in;
 
-	BeginWaitCursor();
-	office_add_in.DisableAllOfficeAddIn();
-	if (nullptr != GetActiveView())
+	temp_file_export_ = CreateUniqueFile();
+	if (SUCCEEDED(office_add_in.DisableAllOfficeAddIn(temp_file_export_)))
 	{
-		(dynamic_cast<COfficeToolsAddInView*>(GetActiveView()))->ShowAddIns();
-	}
+		if (nullptr != GetActiveView())
+		{
+			(dynamic_cast<COfficeToolsAddInView*>(GetActiveView()))->ShowAddIns();
+		}
+	}	
+	Utility::DeleteFile(temp_file_export_);
 	EndWaitCursor();
 }
 
 void CMainFrame::OnButtonSaveChange()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
+
+	BeginWaitCursor();
 
 	OfficeAddIn office_add_in;
 
-	BeginWaitCursor();
-	office_add_in.SaveAddinInformation();
-	if (nullptr != GetActiveView())
+	temp_file_export_ = CreateUniqueFile();
+	if (SUCCEEDED(office_add_in.DisableCurrentOfficeAddIn(temp_file_export_)))
 	{
-		(dynamic_cast<COfficeToolsAddInView*>(GetActiveView()))->ShowAddIns();
+		if (nullptr != GetActiveView())
+		{
+			(dynamic_cast<COfficeToolsAddInView*>(GetActiveView()))->ShowAddIns();
+		}
 	}
+	Utility::DeleteFile(temp_file_export_);
 	EndWaitCursor();
 }
 
 
 fs::path CMainFrame::SaveFile()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	char strFilter[] = { "JSON file  (*.json)|*.json|" };
 	fs::path p_filename_path;
 
@@ -217,7 +240,7 @@ fs::path CMainFrame::SaveFile()
 			}
 			catch (std::filesystem::filesystem_error const& ex)
 			{
-				LOG_ERROR << __FUNCTION__ << "Unable to remove the file, file=" << p_filename_path << "exception:" << ex.what();
+				LOG_ERROR << __FUNCTION__ << "-Unable to remove the file, file=" << p_filename_path << " exception:" << ex.what();
 				return fs::path();
 			}
 		}
@@ -227,7 +250,7 @@ fs::path CMainFrame::SaveFile()
 
 fs::path CMainFrame::SaveFileTxt()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	char strFilter[] = { "log file  (*.log)|*.log|" };
 	fs::path p_filename_path;
 
@@ -245,7 +268,7 @@ fs::path CMainFrame::SaveFileTxt()
 			}
 			catch (std::filesystem::filesystem_error const& ex)
 			{
-				LOG_ERROR << __FUNCTION__ << "Unable to remove the file, file=" << p_filename_path << "exception:" << ex.what();
+				LOG_ERROR << __FUNCTION__ << "-Unable to remove the file, file=" << p_filename_path << " exception:" << ex.what();
 				return fs::path();
 			}
 		}
@@ -255,7 +278,7 @@ fs::path CMainFrame::SaveFileTxt()
 
 fs::path CMainFrame::OpenFile()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	char strFilter[] = { "JSON file  (*.json)|*.json|" };
 	fs::path p_filename_path;
 
@@ -268,61 +291,51 @@ fs::path CMainFrame::OpenFile()
 	return p_filename_path;
 }
 
+
+fs::path CMainFrame::GenerateTemporyFile()
+{
+	wchar_t wUniqueFileName[MAX_PATH + 1];
+	_wtmpnam_s(wUniqueFileName);
+
+	if (wUniqueFileName != nullptr)
+	{
+		fs::path temp_filename = wUniqueFileName;
+		return temp_filename;
+	}
+	return fs::path();
+}
+
+std::wstring CMainFrame::CreateUniqueFile()
+{
+	LOG_DEBUG << __FUNCTION__;
+
+	auto file_export = GenerateTemporyFile();
+	if (file_export.empty() == false)
+	{
+		return file_export;
+	}
+	else
+	{
+		LOG_ERROR << __FUNCTION__ << "-Unable to create the tempory file";
+	}
+	return std::wstring();
+}
 void CMainFrame::OnButtonExport()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	fs::path p_filenamepath;
 
-	try
-	{
-		ProcessInformation processinformation = XLSingleton::getInstance()->Get_Addin_info();
+	OfficeAddIn officeAddIn;
+
 		p_filenamepath = SaveFile();
 		if (p_filenamepath.empty() == false)
 		{
-			pt::wptree root;
-			root.put(L"ImageType", processinformation.imagetype_ == ImageType::x64 ? L"X64" : L"X86");
-			root.put(L"Name", processinformation.Name_);
-			pt::wptree children;
-			for (auto& addininfo : processinformation.addininformation_)
-			{
-				pt::wptree child;
-
-				child.put(L"Description", addininfo.second.Description_);
-				child.put(L"Installed", addininfo.second.Installed_);
-				child.put(L"key", addininfo.second.key_);
-				
-				if (addininfo.second.parent_ == HKEY_LOCAL_MACHINE)
-				{
-					child.put(L"parent", L"HKEY_LOCAL_MACHINE");
-				}
-				else if(addininfo.second.parent_ == HKEY_CURRENT_USER)
-				{
-					child.put(L"parent", L"HKEY_CURRENT_USER");
-				}
-				else
-				{
-					child.put(L"parent", L"HKEY_USERS");
-				}
-				
-				child.put(L"AddInType", addininfo.second.addType_ == AddInType::OFFICE ? L"Office" : L"Excel");
-				child.put(L"LoadBehavior", std::to_wstring(addininfo.second.LoadBehavior_));
-				child.put(L"ProgId", addininfo.second.ProgId_);
-				children.push_back(std::make_pair(L"", child));
-			}
-			root.add_child(L"AddinInformation", children);
-			pt::write_json(p_filenamepath.generic_string(), root);
+			officeAddIn.SaveAddinInformationToFile(p_filenamepath);
 		}
-	}
-	catch (boost::exception const& ex)
-	{
-		LOG_ERROR << __FUNCTION__ << "Unable to write the json file, file=" << p_filenamepath << "exception:" << diagnostic_information(ex);
-	}
 }
-
-
 void CMainFrame::OnButtonImport()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	fs::path p_filenamepath;
 
 	try
@@ -339,14 +352,20 @@ void CMainFrame::OnButtonImport()
 				auto str_addin_load_behavior = addinfo.second.get<std::wstring>(L"LoadBehavior");
 				auto str_addin_installed = addinfo.second.get<std::wstring>(L"Installed");
 				auto str_prog_id = addinfo.second.get<std::wstring>(L"ProgId");
+				auto str_user_name = addinfo.second.get<std::wstring>(L"UserName");
+				auto str_user_sid = addinfo.second.get<std::wstring>(L"SID");
+
+
 
 				DWORD		dw_loadbehavior = std::stoi(str_addin_load_behavior);
 
-				auto it = processinformation.addininformation_.find(str_prog_id);
+				auto str_key = str_user_sid + L"_" + str_prog_id;
+
+				auto it = processinformation.addininformation_.find(str_key);
 				if (it != processinformation.addininformation_.end())
 				{
-					processinformation.addininformation_[str_prog_id].LoadBehavior_ = dw_loadbehavior;
-					processinformation.addininformation_[str_prog_id].Installed_ = str_addin_installed;
+					processinformation.addininformation_[str_key].LoadBehavior_ = dw_loadbehavior;
+					processinformation.addininformation_[str_key].Installed_ = str_addin_installed;
 				}
 			}
 			XLSingleton::getInstance()->Set_Addin_info(processinformation);
@@ -355,14 +374,14 @@ void CMainFrame::OnButtonImport()
 	}
 	catch (boost::exception const& ex)
 	{
-		LOG_ERROR << __FUNCTION__ << "Unable to read the json file, file=" << p_filenamepath << "exception:" << diagnostic_information(ex);	
+		LOG_ERROR << __FUNCTION__ << "-Unable to read the json file, file=" << p_filenamepath << " exception:" << diagnostic_information(ex);	
 	}
 }
 
 
 void CMainFrame::OnButtonExportLogs()
 {
-	LOG_TRACE << __FUNCTION__;
+	LOG_DEBUG << __FUNCTION__;
 	fs::path p_filenamepath;
 
 	try
@@ -376,7 +395,7 @@ void CMainFrame::OnButtonExportLogs()
 	}
 	catch(std::exception ex)
 	{
-		LOG_ERROR << __FUNCTION__ << "Unable to save the log file, file=" << p_filenamepath << "exception:" << ex.what();
+		LOG_ERROR << __FUNCTION__ << "-Unable to save the log file, file=" << p_filenamepath << " exception:" << ex.what();
 	}
 }
 

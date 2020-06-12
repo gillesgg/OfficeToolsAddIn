@@ -2,18 +2,19 @@
 
 #include "OfficeAddinInformation.h"
 
-class ExcelAutomation
+class ExcelAddIn
 {
 public:
 	HRESULT ListInformations(ProcessInformation& processinformation);
-	HRESULT DisableAllAddin(ProcessInformation processinformation);
-	HRESULT DisableAddin(ProcessInformation processinformation);
+	HRESULT DisableAllAddin();
+	HRESULT DisableAddin();
+	HRESULT DisableXLAddinInformation();
 
 private:
 	HRESULT ReadXLAddinInformation(ProcessInformation& processinformation);
 	HRESULT ReadOfficeAddinInformation(ProcessInformation& processinformation);
-	HRESULT DisableAllXLAddinInformation(ProcessInformation processinformation);
-	HRESULT DisableXLAddinInformation(ProcessInformation processinformation);
+	HRESULT DisableAllXLAddinInformation();
+
 
 private:
 	Excel::_ApplicationPtr _pXL;
